@@ -121,3 +121,92 @@ function git-clean-branches () {
 
     echo "Use 'git-clean-branches | xargs git branch -d' to actually delete these." >&2
 }
+
+# 快速跳转到 Git 仓库根目录
+cdgit() {
+    if git rev-parse --git-dir > /dev/null 2>&1; then
+        cd "$(git rev-parse --show-toplevel)"
+    else
+        echo "Not in a Git repository"
+    fi
+}
+
+# 显示详细的 Git 状态摘要
+git_summary() {
+    if git rev-parse --git-dir > /dev/null 2>&1; then
+        echo "=== Git Repository Summary ==="
+        echo "Branch: $(git symbolic-ref --short HEAD 2>/dev/null || echo 'Detached HEAD')"
+        echo "Remote: $(git remote get-url origin 2>/dev/null || echo 'No remote')"
+        echo "Status: $(git status --porcelain 2>/dev/null | wc -l) files changed"
+        if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
+            echo
+            git status --short
+        fi
+    else
+        echo "Not in a Git repository"
+    fi
+}
+
+# ========== 代理配置常量（按需修改） ==========
+#PROXY_ADDR="http://127.0.0.1:8119"  # 你的代理地址+端口
+#NO_PROXY_LIST="localhost,127.0.0.1,10.*,192.168.*,10.4.0.178,hub.byd.com"  # 内网直连列表
+PROXY_ADDR="http://127.0.0.1:8119"
+NO_PROXY_LIST="localhost,127.0.0.1,10.*,192.168.*"
+
+# ========== 1. 加载代理（外网走代理） ==========
+function set-proxy() {
+    # 1. 设置系统级代理（影响 curl/wget/git 等所有工具）
+    export http_proxy=$PROXY_ADDR
+    export https_proxy=$PROXY_ADDR
+    export all_proxy=$PROXY_ADDR
+    export HTTP_PROXY=$PROXY_ADDR
+    export HTTPS_PROXY=$PROXY_ADDR
+    export ALL_PROXY=$PROXY_ADDR
+    export NO_PROXY=$NO_PROXY_LIST
+    export no_proxy=$NO_PROXY_LIST
+
+    # 2. 设置 Git 全局代理（兜底，确保 Git 识别）
+    git config --global http.proxy $PROXY_ADDR
+    git config --global https.proxy $PROXY_ADDR
+    git config --global http.noProxy $NO_PROXY_LIST
+
+    # 提示生效
+    echo -e "\033[32m✅ 代理已加载：$PROXY_ADDR\033[0m"
+    echo -e "\033[36m🔍 绕过代理：$NO_PROXY_LIST\033[0m"
+}
+
+# ========== 2. 取消代理（内网直连） ==========
+function unset-proxy() {
+    # 1. 清空系统级代理
+    unset http_proxy https_proxy all_proxy
+    unset HTTP_PROXY HTTPS_PROXY ALL_PROXY
+    unset NO_PROXY no_proxy
+
+    # 2. 清空 Git 全局代理
+    git config --global --unset http.proxy
+    git config --global --unset https.proxy
+    git config --global --unset http.noProxy
+
+    # 提示生效
+    echo -e "\033[31m❌ 代理已取消，当前为直连模式\033[0m"
+}
+
+# ========== 3. 查看当前代理状态（可选，方便排查） ==========
+function check-proxy() {
+    echo -e "\033[33m===== 系统代理状态 =====\033[0m"
+    echo "http_proxy: ${http_proxy:-未设置}"
+    echo "https_proxy: ${https_proxy:-未设置}"
+    echo "no_proxy: ${no_proxy:-未设置}"
+    echo -e "\033[33m===== Git 代理状态 =====\033[0m"
+    git config --global --get http.proxy || echo "Git http.proxy: 未设置"
+    git config --global --get http.noProxy || echo "Git http.noProxy: 未设置"
+}
+
+#============ 4. yazi 启动方式 =============================
+function y() {
+	local tmp="$(mktemp -t "yazi-cwd.XXXXXX")" cwd
+	yazi "$@" --cwd-file="$tmp"
+	IFS= read -r -d '' cwd < "$tmp"
+	[ -n "$cwd" ] && [ "$cwd" != "$PWD" ] && builtin cd -- "$cwd"
+	rm -f -- "$tmp"
+}

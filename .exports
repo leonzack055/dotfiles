@@ -24,3 +24,24 @@ export MANPAGER='less -X';
 if [[ $OSTYPE == darwin* ]]; then
     export SHELL=/bin/bash
 fi
+
+# use ssh
+export SOCKS_PROXY=socks5://127.0.0.1:1080
+export SOCKS5_PROXY=$SOCKS_PROXY
+# 部分程序认小写
+export socks_proxy=$SOCKS_PROXY
+export socks5_proxy=$SOCKS_PROXY
+# 配置 HTTP/HTTPS 代理环境变量（临时生效）
+export HTTP_PROXY=http://127.0.0.1:8119
+export HTTPS_PROXY=$HTTP_PROXY
+export NO_PROXY=localhost,127.0.0.1,10.0.0.0/8,192.168.0.0/16,hub.byd.com  # 内网不走代理
+# 小写（部分程序认小写）
+export http_proxy=$HTTP_PROXY
+export https_proxy=$HTTPS_PROXY
+export no_proxy=$NO_PROXY
+# use npm
+export NVM_NODEJS_ORG_MIRROR=http://10.17.21.147:9081/repository/raw-node-proxy/
+# 配置nvm默认设置
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
