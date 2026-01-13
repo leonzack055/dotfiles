@@ -2,19 +2,198 @@
 
 export PS1="\u@\h:\w\\$ "
 
-# Only change prompt if running interactively
+#!/usr/bin/env bash
+
+# 颜色主题定义
+COLOR_RESET='\[\e[0m\]'
+COLOR_BOLD='\[\e[1m\]'
+COLOR_DIM='\[\e[2m\]'
+
+# 用户名颜色（根据是否为root用户变化）
+COLOR_USER='\[\e[38;5;46m\]'      # 绿色
+COLOR_ROOT='\[\e[38;5;196m\]'     # 红色
+
+# 主机名颜色（根据主机类型变化）
+COLOR_HOST='\[\e[38;5;214m\]'     # 橙色
+COLOR_HOST_REMOTE='\[\e[38;5;207m\]' # 紫色（远程主机）
+
+# 路径颜色
+COLOR_PATH='\[\e[38;5;75m\]'       # 蓝色
+COLOR_PATH_GIT='\[\e[38;5;220m\]' # 金色（Git仓库中）
+
+# Git 状态颜色
+COLOR_GIT_CLEAN='\[\e[38;5;40m\]'   # 绿色
+COLOR_GIT_DIRTY='\[\e[38;5;208m\]'  # 橙色
+COLOR_GIT_STAGED='\[\e[38;5;226m\]'  # 黄色
+COLOR_GIT_BRANCH='\[\e[38;5;147m\]' # 淡紫色
+
+# 提示符颜色 - 修复：使用默认颜色，不基于历史命令状态
+COLOR_PROMPT='\[\e[38;5;123m\]'     # 青色
+
+# Git 状态检测函数
+git_status() {
+    if [[ ! -d .git ]] && ! git rev-parse --git-dir > /dev/null 2>&1; then
+        return 0
+    fi
+    
+    local branch_name=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
+    if [[ -z $branch_name ]]; then
+        return 0
+    fi
+    
+    local git_status=""
+    local status_color=$COLOR_GIT_CLEAN
+    
+    # 检查工作目录状态
+    if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
+        local staged_files=$(git diff --cached --name-only 2>/dev/null | wc -l)
+        local modified_files=$(git diff --name-only 2>/dev/null | wc -l)
+        local untracked_files=$(git ls-files --others --exclude-standard 2>/dev/null | wc -l)
+        
+        if [[ $staged_files -gt 0 ]]; then
+            status_color=$COLOR_GIT_STAGED
+            git_status="${git_status}●${staged_files}"
+        fi
+        
+        if [[ $modified_files -gt 0 ]]; then
+            status_color=$COLOR_GIT_DIRTY
+            git_status="${git_status}✚${modified_files}"
+        fi
+        
+        if [[ $untracked_files -gt 0 ]]; then
+            status_color=$COLOR_GIT_DIRTY
+            git_status="${git_status}…${untracked_files}"
+        fi
+    fi
+    
+    echo -e "${status_color}[${branch_name}${git_status}]${COLOR_RESET}"
+}
+
+# 智能路径简化函数
+smart_path() {
+    local path="$PWD"
+    local home="$HOME"
+    
+    # 将主目录替换为 ~
+    path="${path/#$home/\~}"
+    
+    # 如果在 Git 仓库中，显示相对路径
+    if git rev-parse --git-dir > /dev/null 2>&1; then
+        local git_root=$(git rev-parse --show-toplevel 2>/dev/null)
+        if [[ -n $git_root ]]; then
+            local git_root_name=$(basename "$git_root")
+            local relative_path="${path#$git_root}"
+            path="${git_root_name}${relative_path}"
+        fi
+    fi
+    
+    # 路径长度限制
+    local max_length=40
+    if [[ ${#path} -gt $max_length ]]; then
+        local path_array=(${path//\// })
+        local new_path=""
+        local i=0
+        
+        # 保留开头和结尾的路径部分
+        for ((i=0; i<${#path_array[@]}; i++)); do
+            if [[ $i -eq 0 ]] || [[ $i -eq $((${#path_array[@]}-1)) ]] || [[ $i -ge $((${#path_array[@]}-2)) ]]; then
+                new_path="${new_path}/${path_array[$i]}"
+            elif [[ $i -eq 1 ]]; then
+                new_path="${new_path}/..."
+            fi
+        done
+        
+        path="$new_path"
+    fi
+    
+    echo "$path"
+}
+
+# 获取当前用户颜色
+get_user_color() {
+    if [[ $EUID -eq 0 ]]; then
+        echo "$COLOR_ROOT$COLOR_BOLD"
+    else
+        echo "$COLOR_USER$COLOR_BOLD"
+    fi
+}
+
+# 获取主机名颜色
+get_host_color() {
+    # 检查是否为远程连接
+    if [[ -n $SSH_CONNECTION ]] || [[ -n $SSH_CLIENT ]] || [[ -n $SSH_TTY ]]; then
+        echo "$COLOR_HOST_REMOTE$COLOR_BOLD"
+    else
+        echo "$COLOR_HOST$COLOR_BOLD"
+    fi
+}
+
+# 修复：构建提示符时不依赖历史命令状态
+build_prompt() {
+    local user_color=$(get_user_color)
+    local host_color=$(get_host_color)
+    local current_user=$(get_user_color)'\u'$COLOR_RESET
+    local current_host=$(get_host_color)'\h'$COLOR_RESET
+    local current_path=""
+    
+    # 根据是否在 Git 仓库选择路径颜色
+    if git rev-parse --git-dir > /dev/null 2>&1; then
+        current_path=$COLOR_PATH_GIT$(smart_path)$COLOR_RESET
+    else
+        current_path=$COLOR_PATH$(smart_path)$COLOR_RESET
+    fi
+    
+    local git_info=$(git_status)
+    
+    # 构建多行提示符 - 移除基于 exit_code 的颜色变化
+    PS1="\n"
+    PS1+="┌─${current_user}@${current_host} "
+    PS1+="in ${current_path}"
+    
+    # 如果有 Git 信息，添加到第一行
+    if [[ -n $git_info ]]; then
+        PS1+=" ${git_info}"
+    fi
+    
+    # 第二行：时间和提示符（使用固定颜色）
+    PS1+="\n"
+    PS1+="└─${COLOR_DIM}\t${COLOR_RESET} "
+    PS1+="${COLOR_PROMPT}❯${COLOR_RESET} "
+    
+    # 设置窗口标题
+    PS1+="\[\e]0;\u@\h: \w\a\]"
+}
+
+# 新方案：使用 trap 来实时显示命令执行结果
+show_command_result() {
+    local exit_code=$?
+    
+    # 只在命令失败时显示错误信息，不影响下一个提示符颜色
+    if [[ $exit_code -ne 0 ]]; then
+        echo -e "${COLOR_PROMPT_ERROR}✗ Command failed with exit code $exit_code${COLOR_RESET}"
+    fi
+}
+
+# 设置动态提示符
+__prompt_command() {
+    build_prompt
+}
+
+# 只在交互式 shell 中设置提示符
 if tty -s; then
-
-    # For colors, use colors.sh in the daler/dotfiles repo to easily show the
-    # color codes. E.g., in \033[38;5;214m\]\h, the 214 indicates an
-    # orange-yellow hostname.
-    #
-    # Or try https://bash-prompt-generator.org/ for more customization.
+    # 特殊主机配置（保留原有逻辑）
     if [[ $HOSTNAME == "biowulf.nih.gov" ]] ; then
-
-        export PS1="\u@\[$(tput sgr0)\]\[\033[38;5;214m\]\h\[$(tput sgr0)\]:\w\\$ "
+        COLOR_HOST='\[\033[38;5;214m\]'
+    elif [[ $HOSTNAME == "helix.nih.gov" ]]; then
+        COLOR_HOST='\[\033[38;5;174m\]'
     fi
-    if [[ $HOSTNAME == "helix.nih.gov" ]]; then
-        export PS1="\u@\[$(tput sgr0)\]\[\033[38;5;174m\]\h\[$(tput sgr0)\]:\w\\$ "
-    fi
+    
+    # 使用 PROMPT_COMMAND 动态更新提示符
+    PROMPT_COMMAND="__prompt_command"
+    
+    # 设置 DEBUG trap 来捕获命令执行结果（可选方案）
+    # trap 'show_command_result' DEBUG
+    
+    # 简单的回退提示符（如果上述方法失败）
+    export PS1="\u@\h:\w\$ "
 fi
