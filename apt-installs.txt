@@ -22,7 +22,7 @@ tmux                 # for persistent sessions
 # GUI --------------------------------------------------------------
 gimp                 # image editing
 git-cola             # subset and stage git changes visually
-gnome-tweak-tool     # for configuring gnome
+gnome-tweaks	     # for configuring gnome
 indicator-multiload  # live readout in the top bar for CPU, RAM, network, disk
 inkscape             # vector images
 meld                 # multi-way graphical merge tool
