@@ -148,9 +148,9 @@ git_summary() {
 }
 
 # ========== 代理配置常量（按需修改） ==========
-#PROXY_ADDR="http://127.0.0.1:8119"  # 你的代理地址+端口
-#NO_PROXY_LIST="localhost,127.0.0.1,10.*,192.168.*,10.4.0.178,hub.byd.com"  # 内网直连列表
-PROXY_ADDR="http://127.0.0.1:8119"
+#PROXY_ADDR="http://127.0.0.1:7897"  # 你的代理地址+端口
+#NO_PROXY_LIST="localhost,127.0.0.1,10.*,192.168.*"  # 内网直连列表
+PROXY_ADDR="http://127.0.0.1:7897"
 NO_PROXY_LIST="localhost,127.0.0.1,10.*,192.168.*"
 
 # ========== 1. 加载代理（外网走代理） ==========
@@ -210,3 +210,30 @@ function y() {
 	[ -n "$cwd" ] && [ "$cwd" != "$PWD" ] && builtin cd -- "$cwd"
 	rm -f -- "$tmp"
 }
+
+# ========== 5. 加载nvidia显示驱动  ==========
+function set-nvidia() {
+    # 1. 设置高显存资源占用启动，或者可以分屏启动（570驱动可能分屏有bug）
+    export __NV_PRIME_RENDER_OFFLOAD=1
+    export __GLX_VENDOR_LIBRARY_NAME=nvidia
+    # 提示生效
+    echo -e "\033[32m✅ 变量已加载__NV_PRIME_RENDER_OFFLOAD：$__NV_PRIME_RENDER_OFFLOAD\033[0m"
+    echo -e "\033[32m✅ 变量已加载__GLX_VENDOR_LIBRARY_NAME：$__NV_PRIME_RENDER_OFFLOAD\033[0m"
+}
+
+# ========== 2. 取消代理（内网直连） ==========
+function unset-nvidia() {
+    # 1. 清空系统级代理
+    unset __NV_PRIME_RENDER_OFFLOAD __GLX_VENDOR_LIBRARY_NAME
+    # 提示生效
+    echo -e "\033[31m❌ nvidia显卡渲染已取消，当前为集显直接渲染模式\033[0m"
+}
+
+# ========== 3. 查看当前代理状态（可选，方便排查） ==========
+function check-nvidia() {
+    echo -e "\033[33m===== 系统nvidia渲染状态 =====\033[0m"
+    echo "GLX_VENDOR: ${__GLX_VENDOR_LIBRARY_NAME:-未设置}"
+    echo "Nvidia_prime_render: ${__NV_PRIME_RENDER_OFFLOAD:-未设置}"
+}
+
+
